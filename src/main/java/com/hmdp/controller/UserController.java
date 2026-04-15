@@ -6,12 +6,14 @@ import com.hmdp.dto.UserDTO;
 import com.hmdp.entity.UserInfo;
 import com.hmdp.service.IUserInfoService;
 import com.hmdp.service.IUserService;
+import com.hmdp.service.impl.UserServiceImpl;
 import com.hmdp.utils.UserHolder;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
+import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpSession;
 
 /**
@@ -27,11 +29,17 @@ import javax.servlet.http.HttpSession;
 @RequestMapping("/user")
 public class UserController {
 
+    private final UserServiceImpl userServiceImpl;
+
     @Resource
     private IUserService userService;
 
     @Resource
     private IUserInfoService userInfoService;
+
+    UserController(UserServiceImpl userServiceImpl) {
+        this.userServiceImpl = userServiceImpl;
+    }
 
     /**
      * 发送手机验证码
@@ -63,9 +71,8 @@ public class UserController {
      * @return 无
      */
     @PostMapping("/logout")
-    public Result logout() {
-        // TODO 实现登出功能
-        return Result.fail("功能未完成");
+    public Result logout(HttpServletRequest request) {
+        return Result.ok(userService.logout(request));
     }
 
     /**

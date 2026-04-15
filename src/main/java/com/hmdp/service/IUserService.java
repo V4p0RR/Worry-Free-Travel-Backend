@@ -1,5 +1,6 @@
 package com.hmdp.service;
 
+import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpSession;
 
 import com.baomidou.mybatisplus.extension.service.IService;
@@ -34,5 +35,13 @@ public interface IUserService extends IService<User> {
    * @return 登录结果
    */
   Result login(LoginFormDTO loginForm, HttpSession session);
+
+  /**
+   * 登出功能
+   * 
+   * @param request HttpServletRequest对象，用于获取token
+   * @return 登出结果
+   */
+  Boolean logout(HttpServletRequest request);
 
 }

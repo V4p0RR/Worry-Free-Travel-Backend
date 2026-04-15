@@ -80,6 +80,12 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 
     @Override
     public void run() {
+      // // 创建消费者组
+      // try {
+      // stringRedisTemplate.opsForStream().createGroup("stream.orders", "g1");
+      // } catch (Exception e) {
+      // System.out.println("消费者组已存在，无需重复创建");
+      // }
       while (true) {
         try {
           // 1.获取消息队列中的订单信息 XREADGROUP GROUP g1 c1 COUNT 1 BLOCK 2000 STREAMS s1 >
@@ -110,6 +116,12 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 
     @SuppressWarnings("unchecked")
     private void handlePendingList() {
+      // // 创建消费者组
+      // try {
+      // stringRedisTemplate.opsForStream().createGroup("stream.orders", "g1");
+      // } catch (Exception e) {
+      // System.out.println("消费者组已存在，无需重复创建");
+      // }
       while (true) {
         try {
           // 1.获取pending-list中的订单信息 XREADGROUP GROUP g1 c1 COUNT 1 BLOCK 2000 STREAMS s1 0

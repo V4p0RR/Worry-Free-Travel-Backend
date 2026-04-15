@@ -10,6 +10,7 @@ import com.hmdp.service.IUserService;
 import com.hmdp.utils.RedisConstants;
 import com.hmdp.utils.RegexUtils;
 import com.hmdp.utils.SystemConstants;
+import com.hmdp.utils.UserHolder;
 
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.bean.copier.CopyOptions;
@@ -23,6 +24,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import javax.annotation.Resource;
+import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpSession;
 
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -137,6 +139,25 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
     }
 
     return Result.fail("功能未完成");
+  }
+
+  /**
+   * 登出功能
+   */
+  @Override
+  public Boolean logout(HttpServletRequest request) {
+    // 获取当前登录用户
+    UserDTO user = UserHolder.getUser();
+    if (user != null) {
+      // 从Redis中获取当前token（需要从ThreadLocal或请求中获取）
+      String token = request.getHeader("authorization");
+      stringRedisTemplate.delete(RedisConstants.LOGIN_USER_KEY + token);
+      // 清空ThreadLocal
+      UserHolder.removeUser();
+
+      return true;
+    }
+    return false;
   }
 
 }
