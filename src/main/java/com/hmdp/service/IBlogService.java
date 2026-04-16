@@ -1,6 +1,7 @@
 package com.hmdp.service;
 
 import com.hmdp.dto.Result;
+import com.hmdp.dto.UserDTO;
 import com.hmdp.entity.Blog;
 
 import java.util.List;
@@ -39,4 +40,12 @@ public interface IBlogService extends IService<Blog> {
    * @param Long id
    */
   Result likeBlog(Long id);
+
+  /**
+   * 点赞排行榜
+   * 
+   * @param Long id
+   * @return
+   */
+  List<UserDTO> getBlogLikes(Long id);
 }

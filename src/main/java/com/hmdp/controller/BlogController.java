@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import java.util.List;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 
 /**
  * <p>
@@ -79,4 +81,14 @@ public class BlogController {
     public Result queryBlogById(@PathVariable("id") Long id) {
         return blogService.queryBlogById(id);
     }
+
+    /**
+     * 点赞排行榜 博客详情页展示最早点赞的topn用户list
+     * 
+     */
+    @GetMapping("/likes/{id}")
+    public Result getBlogLikes(@PathVariable Long id) {
+        return Result.ok(blogService.getBlogLikes(id));
+    }
+
 }
