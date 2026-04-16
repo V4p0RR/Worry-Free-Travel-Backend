@@ -1,15 +1,19 @@
 package com.hmdp.service.impl;
 
 import com.hmdp.dto.Result;
-
+import com.hmdp.entity.SeckillVoucher;
 import com.hmdp.entity.VoucherOrder;
 import com.hmdp.mapper.VoucherOrderMapper;
 import com.hmdp.service.ISeckillVoucherService;
 import com.hmdp.service.IVoucherOrderService;
+import com.hmdp.utils.RedisConstants;
 import com.hmdp.utils.RedisIdWorker;
 import com.hmdp.utils.UserHolder;
 
 import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.core.util.BooleanUtil;
+import lombok.extern.log4j.Log4j;
+import lombok.extern.log4j.Log4j2;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 
@@ -46,6 +50,7 @@ import org.springframework.stereotype.Service;
  * @since 2021-12-22
  */
 @Service
+@Log4j2
 public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, VoucherOrder>
     implements IVoucherOrderService {
   @Resource
@@ -74,18 +79,19 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
   @PostConstruct
   private void init() {
     SECKILL_ORDER_EXECUTOR.submit(new VoucherOrderHandler());
+    // 创建消费者组
+    try {
+      stringRedisTemplate.opsForStream().createGroup("stream.orders", "g1");
+    } catch (Exception e) {
+      System.out.println("消费者组已存在，无需重复创建");
+    }
   }
 
   private class VoucherOrderHandler implements Runnable {
 
     @Override
     public void run() {
-      // // 创建消费者组
-      // try {
-      // stringRedisTemplate.opsForStream().createGroup("stream.orders", "g1");
-      // } catch (Exception e) {
-      // System.out.println("消费者组已存在，无需重复创建");
-      // }
+
       while (true) {
         try {
           // 1.获取消息队列中的订单信息 XREADGROUP GROUP g1 c1 COUNT 1 BLOCK 2000 STREAMS s1 >
@@ -116,12 +122,12 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 
     @SuppressWarnings("unchecked")
     private void handlePendingList() {
-      // // 创建消费者组
-      // try {
-      // stringRedisTemplate.opsForStream().createGroup("stream.orders", "g1");
-      // } catch (Exception e) {
-      // System.out.println("消费者组已存在，无需重复创建");
-      // }
+      // 创建消费者组
+      try {
+        stringRedisTemplate.opsForStream().createGroup("stream.orders", "g1");
+      } catch (Exception e) {
+        System.out.println("消费者组已存在，无需重复创建");
+      }
       while (true) {
         try {
           // 1.获取pending-list中的订单信息 XREADGROUP GROUP g1 c1 COUNT 1 BLOCK 2000 STREAMS s1 0
@@ -154,6 +160,19 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
    */
   @Override
   public Result seckillVoucher(Long voucherId) {
+    // 先检查 Redis 中是否有库存数据
+    String stockKey = RedisConstants.SECKILL_STOCK_KEY + voucherId;
+    if (BooleanUtil.isFalse(stringRedisTemplate.hasKey(stockKey))) {
+      // 从数据库查询秒杀券信息
+      SeckillVoucher seckillVoucher = seckillVoucherService.getById(voucherId);
+      if (seckillVoucher != null) {
+        // 初始化库存到 Redis
+        stringRedisTemplate.opsForValue().set(stockKey, seckillVoucher.getStock().toString());
+        // 初始化订单集合
+        // stringRedisTemplate.opsForSet().add(RedisConstants.SECKILL_ORDER_KEY +
+        // voucherId);
+      }
+    }
     // 先获取userId和orderId
     Long userId = UserHolder.getUser().getId();
     long orderId = redisIdWorker.nextId("order");
@@ -164,6 +183,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         userId.toString(),
         String.valueOf(orderId));
     // 返回非0，没有购买资格
+
     int r = result.intValue();
     if (r != 0) {
       // 如果返回值不为0，说明没有购买资格

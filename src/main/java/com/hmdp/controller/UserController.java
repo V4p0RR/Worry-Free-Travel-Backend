@@ -3,18 +3,22 @@ package com.hmdp.controller;
 import com.hmdp.dto.LoginFormDTO;
 import com.hmdp.dto.Result;
 import com.hmdp.dto.UserDTO;
+import com.hmdp.entity.User;
 import com.hmdp.entity.UserInfo;
 import com.hmdp.service.IUserInfoService;
 import com.hmdp.service.IUserService;
 import com.hmdp.service.impl.UserServiceImpl;
 import com.hmdp.utils.UserHolder;
 
+import cn.hutool.core.bean.BeanUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpSession;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 
 /**
  * <p>
@@ -29,17 +33,17 @@ import javax.servlet.http.HttpSession;
 @RequestMapping("/user")
 public class UserController {
 
-    private final UserServiceImpl userServiceImpl;
+    // private final UserServiceImpl userServiceImpl;
+
+    // UserController(UserServiceImpl userServiceImpl) {
+    // this.userServiceImpl = userServiceImpl;
+    // }
 
     @Resource
     private IUserService userService;
 
     @Resource
     private IUserInfoService userInfoService;
-
-    UserController(UserServiceImpl userServiceImpl) {
-        this.userServiceImpl = userServiceImpl;
-    }
 
     /**
      * 发送手机验证码
@@ -100,4 +104,14 @@ public class UserController {
         // 返回
         return Result.ok(info);
     }
+
+    @GetMapping("/{id}")
+    public Result queryUserById(@PathVariable Long id) {
+        User user = userService.getById(id);
+        if (user == null) {
+            return Result.ok();
+        }
+        return Result.ok(BeanUtil.copyProperties(user, UserDTO.class));
+    }
+
 }
