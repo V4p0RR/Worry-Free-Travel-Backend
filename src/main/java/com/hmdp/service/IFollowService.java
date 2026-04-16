@@ -1,7 +1,11 @@
 package com.hmdp.service;
 
 import com.hmdp.dto.Result;
+import com.hmdp.dto.UserDTO;
 import com.hmdp.entity.Follow;
+
+import java.util.List;
+
 import com.baomidou.mybatisplus.extension.service.IService;
 
 /**
@@ -30,5 +34,13 @@ public interface IFollowService extends IService<Follow> {
    * @return
    */
   Result isFollow(Long id);
+
+  /**
+   * 共同关注
+   * 
+   * @param id
+   * @return List<UserDTO>
+   */
+  List<UserDTO> followCommons(Long id);
 
 }

@@ -5,9 +5,18 @@ import com.hmdp.dto.UserDTO;
 import com.hmdp.entity.Follow;
 import com.hmdp.mapper.FollowMapper;
 import com.hmdp.service.IFollowService;
+import com.hmdp.service.IUserService;
 import com.hmdp.utils.UserHolder;
+
+import cn.hutool.core.bean.BeanUtil;
+
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+
+import java.util.Collections;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import javax.annotation.Resource;
 
@@ -26,6 +35,9 @@ import org.springframework.stereotype.Service;
 public class FollowServiceImpl extends ServiceImpl<FollowMapper, Follow> implements IFollowService {
   @Resource
   private StringRedisTemplate stringRedisTemplate;
+
+  @Resource
+  private IUserService userService;
 
   /**
    * 关注或取消关注
@@ -87,4 +99,36 @@ public class FollowServiceImpl extends ServiceImpl<FollowMapper, Follow> impleme
     return Result.ok(isFollow);
   }
 
+  /**
+   * 查询共同关注
+   * 
+   * @param id
+   * @return
+   */
+  @Override
+  public List<UserDTO> followCommons(Long id) {
+    // 获取当前用户key
+    String keyCurrent = "follows:" + UserHolder.getUser().getId();
+    // 获取要查的用户key
+    String keyTarget = "follows:" + id;
+    // 求交集
+    Set<String> intersect = stringRedisTemplate.opsForSet().intersect(keyCurrent, keyTarget);
+    // 判断是否为空
+    if (intersect == null || intersect.isEmpty()) {
+      return Collections.emptyList();
+    }
+    // 转成ids
+    List<Long> ids = intersect
+        .stream()
+        .map(Long::valueOf)
+        .collect(Collectors.toList());
+    // 转成用户list 并转为userdto
+    List<UserDTO> users = userService.listByIds(ids)
+        .stream()
+        .map(user -> BeanUtil.copyProperties(user, UserDTO.class))
+        .collect(Collectors.toList());
+
+    // 返回
+    return users;
+  }
 }
