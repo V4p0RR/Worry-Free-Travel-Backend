@@ -48,4 +48,21 @@ public interface IBlogService extends IService<Blog> {
    * @return
    */
   List<UserDTO> getBlogLikes(Long id);
+
+  /**
+   * 保存博客
+   * 
+   * @param blog
+   * @return
+   */
+  Result saveBlog(Blog blog);
+
+  /**
+   * 查询关注的人的博客
+   * 
+   * @param max
+   * @param offset
+   * @return
+   */
+  Result queryBlogOfFollow(Long max, Integer offset);
 }

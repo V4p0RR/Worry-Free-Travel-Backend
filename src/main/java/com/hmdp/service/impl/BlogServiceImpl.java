@@ -1,11 +1,15 @@
 package com.hmdp.service.impl;
 
+import com.hmdp.config.RedisConfig;
 import com.hmdp.dto.Result;
+import com.hmdp.dto.ScrollResult;
 import com.hmdp.dto.UserDTO;
 import com.hmdp.entity.Blog;
+import com.hmdp.entity.Follow;
 import com.hmdp.entity.User;
 import com.hmdp.mapper.BlogMapper;
 import com.hmdp.service.IBlogService;
+import com.hmdp.service.IFollowService;
 import com.hmdp.service.IUserService;
 import com.hmdp.utils.RedisConstants;
 import com.hmdp.utils.SystemConstants;
@@ -17,6 +21,7 @@ import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -25,6 +30,7 @@ import java.util.stream.Collectors;
 import javax.annotation.Resource;
 
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ZSetOperations.TypedTuple;
 import org.springframework.stereotype.Service;
 
 /**
@@ -38,6 +44,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IBlogService {
 
+  private final RedisConfig redisConfig;
+
   @Resource
   private IUserService userService;
 
@@ -46,6 +54,13 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
 
   @Resource
   private StringRedisTemplate stringRedisTemplate;
+
+  @Resource
+  private IFollowService followService;
+
+  BlogServiceImpl(RedisConfig redisConfig) {
+    this.redisConfig = redisConfig;
+  }
 
   @Override
   public Result queryBlogById(Long id) {
@@ -197,6 +212,86 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
         .collect(Collectors.toList());
     // 返回
     return users;
+  }
+
+  /**
+   * 保存笔记
+   * 
+   * @param blog
+   * @return Result
+   */
+  @Override
+  public Result saveBlog(Blog blog) {
+    if (blog.getShopId() == null) {
+      return Result.fail("请选择店铺！");
+    }
+    if (blog.getContent() == null) {
+      return Result.fail("请填写内容！");
+    }
+    // 获取登录用户
+    UserDTO user = UserHolder.getUser();
+    blog.setUserId(user.getId());
+    // 保存探店博文
+    boolean isSuccess = blogService.save(blog);
+    if (!isSuccess) {
+      return Result.fail("笔记保存失败！");
+    }
+    // 查询所有粉丝 select * from tb_follow where follow_id = ?
+    List<Follow> follows = followService.query().eq("follow_user_id", user.getId()).list();
+    // 推送给所有粉丝
+    for (Follow follow : follows) { // 每个用户都有一个zset收件箱
+      String key = RedisConstants.FEED_KEY + follow.getUserId();
+      stringRedisTemplate.opsForZSet().add(key, blog.getId().toString(), System.currentTimeMillis());
+    }
+    // 返回id
+    return Result.ok(blog.getId());
+  }
+
+  @Override
+  public Result queryBlogOfFollow(Long max, Integer offset) {
+    // 获取当前用户收件箱
+    Long userId = UserHolder.getUser().getId();
+    // 解析数据 blogId,minTime,offset
+    String key = RedisConstants.FEED_KEY + userId;
+    // ZREVRANGEBYSCORE key Max Min LIMIT offset cOunt
+    Set<TypedTuple<String>> tuples = stringRedisTemplate.opsForZSet()
+        .reverseRangeByScoreWithScores(key, 0, max, offset, 2);
+
+    // 判断数据是否为空
+    if (tuples == null || tuples.isEmpty()) {
+      return Result.ok();
+    }
+    long minTime = 0;
+    int os = 1;// 最小时间重复的个数
+    List<Long> ids = new ArrayList<>(tuples.size());
+    for (TypedTuple<String> tuple : tuples) {
+      ids.add(Long.valueOf(tuple.getValue()));
+      Long time = tuple.getScore().longValue(); // 最后一个必为mintime
+      if (minTime == time) {
+        os++;
+      } else {
+        minTime = time;
+        os = 1;
+      }
+    }
+    // 根据id查blog
+    String idStr = StrUtil.join(",", ids);
+    List<Blog> blogs = blogService.query()
+        .in("id", ids)
+        .last("ORDER BY FIELD(id," + idStr + ")")
+        .list();
+    for (Blog blog : blogs) {
+      // 查询博客有关的用户
+      queryBlogUser(blog);
+      // 查询blog是否被点赞
+      isBlogLiked(blog);
+    }
+    // 封装 返回
+    ScrollResult scrollResult = new ScrollResult();
+    scrollResult.setList(blogs);
+    scrollResult.setMinTime(minTime);
+    scrollResult.setOffset(os);
+    return Result.ok(scrollResult);
   }
 
 }
