@@ -19,6 +19,8 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpSession;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 
 /**
  * <p>
@@ -105,6 +107,12 @@ public class UserController {
         return Result.ok(info);
     }
 
+    /**
+     * 查询用户详情
+     * 
+     * @param id 用户id
+     * @return 用户详情
+     */
     @GetMapping("/{id}")
     public Result queryUserById(@PathVariable Long id) {
         User user = userService.getById(id);
@@ -112,6 +120,24 @@ public class UserController {
             return Result.ok();
         }
         return Result.ok(BeanUtil.copyProperties(user, UserDTO.class));
+    }
+
+    /**
+     * 用户签到
+     * 
+     */
+    @PostMapping("/sign")
+    public Result sign() {
+        return userService.sign();
+    }
+
+    /**
+     * 统计连续签到天数
+     * 
+     */
+    @GetMapping("/sign/count")
+    public Result signCount() {
+        return userService.signCount();
     }
 
 }

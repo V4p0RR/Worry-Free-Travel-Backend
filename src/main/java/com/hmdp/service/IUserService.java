@@ -44,4 +44,18 @@ public interface IUserService extends IService<User> {
    */
   Boolean logout(HttpServletRequest request);
 
+  /**
+   * 签到功能
+   * 
+   * @return
+   */
+  Result sign();
+
+  /**
+   * 统计连续签到天数
+   * 
+   * @return
+   */
+  Result signCount();
+
 }
