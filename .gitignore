@@ -31,3 +31,8 @@ build/
 
 ### VS Code ###
 .vscode/
+
+
+###nginx###
+/nginx-1.18.0/logs/*
+/nginx-1.18.0/docs/*
