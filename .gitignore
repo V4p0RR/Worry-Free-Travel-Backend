@@ -36,3 +36,4 @@ build/
 ###nginx###
 /nginx-1.18.0/logs/*
 /nginx-1.18.0/docs/*
+/nginx-1.18.0/
