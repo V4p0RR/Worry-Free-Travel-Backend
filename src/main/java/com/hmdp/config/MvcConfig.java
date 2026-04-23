@@ -22,12 +22,18 @@ public class MvcConfig implements WebMvcConfigurer {
   @Override
   public void addInterceptors(InterceptorRegistry registry) {
     registry.addInterceptor(new LoginInterceptor()).excludePathPatterns(
-        "/user/login",
         "/user/code",
+        "/user/login",
+        "/user/logout",
+        "/user/{id}",
+        "/user/info/{id}",
         "/blog/hot",
+        "/blog/{id}",
+        "/blog/likes/{id}",
+        "/blog/of/user",
         "/shop/**",
         "/shop-type/**",
-        "/voucher/**",
+        "/voucher/list/{shopId}",
         "/upload/**").order(1);
     registry.addInterceptor(new RefreshTokenInterceptor(stringRedisTemplate)).order(0);// 默认拦截所有请求 调节顺序，第一个执行
   }

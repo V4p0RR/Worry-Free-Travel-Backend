@@ -42,7 +42,7 @@ public interface IUserService extends IService<User> {
    * @param request HttpServletRequest对象，用于获取token
    * @return 登出结果
    */
-  Boolean logout(HttpServletRequest request);
+  Result logout(HttpServletRequest request);
 
   /**
    * 签到功能

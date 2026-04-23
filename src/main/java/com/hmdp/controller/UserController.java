@@ -78,7 +78,7 @@ public class UserController {
      */
     @PostMapping("/logout")
     public Result logout(HttpServletRequest request) {
-        return Result.ok(userService.logout(request));
+        return userService.logout(request);
     }
 
     /**

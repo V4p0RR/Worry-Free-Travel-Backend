@@ -148,19 +148,15 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
    * 登出功能
    */
   @Override
-  public Boolean logout(HttpServletRequest request) {
-    // 获取当前登录用户
-    UserDTO user = UserHolder.getUser();
-    if (user != null) {
-      // 从Redis中获取当前token（需要从ThreadLocal或请求中获取）
-      String token = request.getHeader("authorization");
+  public Result logout(HttpServletRequest request) {
+    // 删除Redis中的token（无论是否存在都视为成功）
+    String token = request.getHeader("authorization");
+    if (token != null) {
       stringRedisTemplate.delete(RedisConstants.LOGIN_USER_KEY + token);
-      // 清空ThreadLocal
-      UserHolder.removeUser();
-
-      return true;
     }
-    return false;
+    // 清空ThreadLocal
+    UserHolder.removeUser();
+    return Result.ok();
   }
 
   /**
