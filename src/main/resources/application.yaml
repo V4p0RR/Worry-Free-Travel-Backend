@@ -1,27 +1,40 @@
 server:
   port: 8081
+  tomcat:
+    threads:
+      max: 500 # 最大工作线程数（默认200），根据压测情况可调至 500-1000
+      min-spare: 50 # 最小空闲线程数
+    accept-count: 500 # 所有线程满载时，允许在队列中等待的连接数（默认100）
+    max-connections: 10000 # 服务器在任何给定时间接受并处理的最大连接数
 spring:
   application:
-    name: hmdp
+    name: worry-free-travel
   datasource:
     driver-class-name: com.mysql.jdbc.Driver
-    url: jdbc:mysql://127.0.0.1:3306/hmdp?useSSL=false&serverTimezone=UTC
+    url: jdbc:mysql://127.0.0.1:3306/worry_free_travel?useSSL=false&serverTimezone=UTC
     username: root
     password: 123456
   redis:
     host: 127.0.0.1
     port: 6379
-    password: '123456'
+    password: "123456"
     lettuce:
       pool:
-        max-active: 10
-        max-idle: 10
+        max-active: 100 #最大连接数 推荐100-200
+        max-idle: 50 #最大空闲连接数
         min-idle: 1
         time-between-eviction-runs: 10s
   jackson:
     default-property-inclusion: NON_NULL # JSON处理时忽略非空字段
+
 mybatis-plus:
-  type-aliases-package: com.hmdp.entity # 别名扫描包
+  type-aliases-package: com.wft.entity # 别名扫描包
 logging:
   level:
-    com.hmdp: debug
+    "[com.wft]": debug
+
+# 秒杀的实现类
+wft:
+  seckill:
+    mode: kafka
+    #mode: redis

@@ -9,11 +9,11 @@
         <relativePath/>
         <!-- lookup parent from repository -->
     </parent>
-    <groupId>com.hmdp</groupId>
-    <artifactId>hm-dianping</artifactId>
+    <groupId>com.wft</groupId>
+    <artifactId>worry-free-travel</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>hm-dianping</name>
-    <description>Demo project for Spring Boot</description>
+    <name>worry-free-travel</name>
+    <description>旅无忧 - Worry-Free-Travel</description>
     <properties>
         <java.version>1.8</java.version>
     </properties>
@@ -40,6 +40,7 @@
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
+            <version>1.18.30</version>
             <optional>true</optional>
         </dependency>
         <dependency>
@@ -78,6 +79,19 @@
             <artifactId>netty-all</artifactId>
             <version>4.1.68.Final</version>            <!-- 确保 Netty 版本兼容 -->
         </dependency>
+
+        <!-- 线程池-->
+        <dependency>
+            <groupId>pool</groupId>
+            <artifactId>AdaptiveBufferedThreadPoolExecutor</artifactId>
+            <version>1.0-SNAPSHOT</version>
+        </dependency>
+        <!-- kafka -->
+        <dependency>
+            <groupId>org.apache.kafka</groupId>
+            <artifactId>kafka-clients</artifactId>
+            <version>3.4.0</version>
+        </dependency>
     </dependencies>
 
     <build>
@@ -92,6 +106,16 @@
                             <artifactId>lombok</artifactId>
                         </exclude>
                     </excludes>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.8.1</version>
+                <configuration>
+                    <source>1.8</source>
+                    <target>1.8</target>
+                    <encoding>UTF-8</encoding>
                 </configuration>
             </plugin>
         </plugins>

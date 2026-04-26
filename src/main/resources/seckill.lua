@@ -16,7 +16,9 @@ local orderKey = 'seckill:order:' .. voucherId
 
 --业务逻辑
 --1.判断库存是否充足 将字符串转为数字类型再比较
-if (tonumber(redis.call('get', stockKey)) <= 0) then
+local stock = redis.call('get', stockKey)
+
+if (not stock or tonumber(stock) <= 0) then
   --库存不足 返回1
   return 1
 end
