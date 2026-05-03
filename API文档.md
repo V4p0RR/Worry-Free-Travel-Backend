@@ -942,3 +942,292 @@ POST /user/code?phone=13812345678
 | 29 | GET | `/follow/common/{id}` | 查询共同关注 | 是 |
 | 30 | POST | `/upload/blog` | 上传博客图片 | 是 |
 | 31 | GET | `/upload/blog/delete` | 删除博客图片 | 是 |
+| 32 | POST | `:8090/api/agent/chat` | **AI智能客服**（Python Agent） | 否 |
+| 33 | GET | `:8090/health` | Agent 健康检查 | 否 |
+
+---
+
+## 九、AI Agent 智能客服模块
+
+### 模块概览
+
+三个组件，独立启动：
+
+```
+┌──────────┐  HTTP   ┌──────────────────┐  HTTP   ┌──────────────────┐
+│  前端    │ ------> │  Python Agent    │ ------> │  Java wft 主项目  │
+│          │ <------ │  (LangGraph)     │ <------ │  (数据API)       │
+└──────────┘        │  Port: 8090      │        │  Port: 8081      │
+                    └──────────────────┘        └──────────────────┘
+                            │
+                            │ MCP 协议（可选）
+                            ▼
+                    ┌──────────────────┐
+                    │  Spring AI MCP   │
+                    │  Server :8020    │
+                    │  (工具注册/发现)  │
+                    └──────────────────┘
+```
+
+| 组件 | 端口 | 技术栈 | 职责 |
+|---|---|---|---|
+| **Java wft** | 8081 | Spring Boot 2.3 / Java 8 | 旅无忧主项目，提供数据读取 REST API |
+| **Python Agent** | 8090 | FastAPI + LangGraph | 意图识别、LLM编排、推荐总结 |
+| **MCP Server** | 8020 | Spring AI MCP / Java 21 | LLM工具注册与发现（可选启用） |
+
+### 启动顺序
+
+```bash
+# 1. 导入 Agent 表（首次）
+mysql -u root -p worry_free_travel < src/main/resources/db/agent_migration.sql
+
+# 2. 启动 Java 主项目
+mvn spring-boot:run
+
+# 3. 启动 Python Agent
+cd Agent/dataSource-mcp-server/py
+pip install -r requirements.txt
+set LLM_API_KEY=sk-your-key          # 必填
+set LLM_BASE_URL=https://api.openai.com   # 可选，默认 OpenAI
+uvicorn main:app --host 0.0.0.0 --port 8090
+
+# 4. [可选] 启动 MCP Server（需 JDK 21）
+# 用于 LLM 自主发现和选择数据源
+cd Agent/dataSource-mcp-server/spring-ai-mcp/data-mcp-service
+mvn spring-boot:run -f pom.xml
+```
+
+### 环境变量（Python Agent）
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `LLM_API_KEY` | — | **必填**，LLM API 密钥 |
+| `LLM_BASE_URL` | `https://api.openai.com` | OpenAI 兼容地址 |
+| `LLM_MODEL` | `gpt-3.5-turbo` | 模型名 |
+| `JAVA_API_BASE` | `http://localhost:8081/api/agent` | Java 数据 API 地址 |
+| `MCP_ENABLED` | `false` | 设为 `true` 启用 MCP 工具发现 |
+| `MCP_BASE_URL` | `http://localhost:8020` | MCP Server 地址 |
+| `RATE_LIMIT_MAX` | `20` | 每分钟请求上限 |
+| `SERVER_PORT` | `8090` | Agent 监听端口 |
+
+兼容任何 OpenAI 接口格式的 LLM（DeepSeek、通义千问、豆包、Ollama 等）。
+
+---
+
+### 9.1 智能客服聊天（核心接口）
+
+前端唯一需要对接的接口。
+
+- **端口：** 8090
+- **POST** `/api/agent/chat`
+- **限流：** 20次/分钟/IP（429 时前端应禁用按钮 3-5 秒）
+
+**请求体（JSON）**
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `userId` | int | 否 | 用户ID（用于画像记录） |
+| `query` | string | 是 | 自然语言输入 |
+| `conversationId` | string | 否 | 首次不传，后续传入上次返回的值以维持会话 |
+
+**请求示例**
+```json
+{
+  "userId": 1001,
+  "query": "周末想吃川菜，人均100左右，环境好适合约会"
+}
+```
+
+**响应示例（200）**
+```json
+{
+  "conversationId": "a1b2c3d4e5f6",
+  "intention": "美食推荐",
+  "optimizedQuery": "推荐人均约100元的川菜餐厅，环境适合约会",
+  "matchedTags": [
+    { "id": 6, "name": "川菜", "category": "food" },
+    { "id": 1, "name": "约会圣地", "category": "scene" }
+  ],
+  "recommendedShops": [
+    {
+      "id": 7,
+      "name": "炉鱼(拱墅万达广场店)",
+      "link": "/shop/7",
+      "area": "北部新城",
+      "address": "杭行路666号万达商业中心4幢2单元409室",
+      "avgPrice": 85,
+      "score": 47,
+      "images": "img1.jpg,img2.jpg"
+    }
+  ],
+  "recommendedBlogs": [
+    {
+      "id": 5,
+      "title": "人均30？杭州这家港式茶餐厅我疯狂打call",
+      "link": "/blog/5",
+      "content": "又吃到一家好吃的茶餐厅...",
+      "liked": 1,
+      "images": "img1.jpg"
+    }
+  ],
+  "summary": "为您找到了1家评分4.7星的川菜餐厅——炉鱼..."
+}
+```
+
+**攻略意图响应示例（博客优先）**
+```json
+{
+  "conversationId": "b2c3d4e5f6a1",
+  "intention": "攻略查看",
+  "optimizedQuery": "推荐酒馆相关的探店博客",
+  "recommendedBlogs": [
+    {
+      "id": 28,
+      "title": "贰麻酒馆氛围绝了，杭州夜生活新地标",
+      "link": "/blog/28",
+      "liked": 76,
+      "content": "远洋乐堤港B1的贰麻酒馆...",
+      "images": "blog1.jpg"
+    },
+    {
+      "id": 32,
+      "title": "Helens学生党福音 人均50喝到微醺",
+      "link": "/blog/32",
+      "liked": 156,
+      "content": "运河上街的Helens真的是学生党快乐老家...",
+      "images": "blog2.jpg"
+    }
+  ],
+  "recommendedShops": [],
+  "summary": "为您找到2篇酒馆探店笔记：贰麻酒馆和Helens，点击标题查看详情..."
+}
+```
+
+**响应示例（429 限流）**
+```json
+{ "detail": "请求过于频繁，请稍后再试" }
+```
+
+**响应字段说明**
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `conversationId` | string | 会话ID，前端需保存用于续接对话 |
+| `intention` | string | 识别到的意图 |
+| `optimizedQuery` | string | LLM 优化后的需求表达 |
+| `matchedTags` | array | 匹配的标签，含 id/name/category |
+| `recommendedShops` | array | 推荐商家：id/**link**(跳转)/name/area/address/avgPrice/score/images |
+| `recommendedBlogs` | array | 推荐笔记：id/**link**(跳转)/title/content/liked/images |
+| `summary` | string | LLM 生成的推荐总结，可直接展示 |
+
+### 前端跳转实现
+
+`recommendedShops[].link` 和 `recommendedBlogs[].link` 是相对路径，前端可直接用作跳转：
+
+```js
+// 点击商家卡片 → 跳转商家详情
+router.push(shop.link)  // → /shop/7
+
+// 点击笔记卡片 → 跳转笔记详情
+router.push(blog.link)  // → /blog/28
+```
+
+后端已有的对应路由（wft 主项目 :8081）：
+- `GET /shop/{id}` — 商家详情（含缓存）
+- `GET /blog/{id}` — 笔记详情（含点赞状态）
+
+---
+
+### 9.2 健康检查
+
+- **GET** `/health`
+```json
+{ "status": "ok" }
+```
+
+---
+
+### 9.3 限流状态查询
+
+- **GET** `/api/agent/rate-limit/{key}`
+- `key` 格式：`user:1001` 或 `ip:192.168.1.1`
+
+```json
+{ "key": "user:1001", "remaining_tokens": 15, "max": 20 }
+```
+
+---
+
+## 十、Java 数据层 API（供 Python Agent 内部调用）
+
+以下接口由 wft 主项目（8081）提供，**前端不直接调用**。使用统一的 `Result` 响应结构。
+
+| 端点 | 方法 | 说明 | 关键参数 |
+|---|---|---|---|
+| `/api/agent/intent-cases` | GET | 获取所有意图案例 | — |
+| `/api/agent/strategy-rules` | GET | 获取策略规则 | `?scene=food_recommend` |
+| `/api/agent/tags` | GET | 标签查询 | `?keyword=川菜&category=food` |
+| `/api/agent/shops/by-tags` | GET | 按标签查商家 | `?tagIds=1,2,3` |
+| `/api/agent/blogs/by-tags` | GET | 按标签查笔记 | `?tagIds=1,2,3` |
+| `/api/agent/datasources` | GET | 数据源导航器 | — |
+
+---
+
+### LangGraph 工作流
+
+```
+用户输入
+  │
+  ▼
+recognize_intent ───── 双判断意图识别 ─────┐
+  │  ├─ 关键词匹配 (tb_intent_case)        │
+  │  ├─ LLM 语义识别（兜底）               │ 命中 → 继续
+  │  └─ 二次识别（关键词提示+LLM重判）      │ 未命中 → 返回"其他"+兜底
+  │                                        ┘
+  ▼
+fetch_tags ───── 调 Java /tags 获取匹配标签
+  │
+  ▼
+aggregate_data ── 并发调 /shops/by-tags + /blogs/by-tags
+  │
+  ▼
+select_and_summarize ── 策略规则过滤 + LLM 生成推荐总结
+  │
+  ▼
+返回 ChatResponse
+```
+
+参考 Coze 工作流：**DuoSense**（意图识别）+ **MCP_Data_Summary**（数据聚合）。
+
+### 策略规则
+
+配置在 `tb_strategy_rule` 表，在 `select_and_summarize` 节点应用：
+
+| action | 效果 | 示例 conditions |
+|---|---|---|
+| `filter` | 过滤不符合条件的 | `{"rating_gte": 4.0}` 评分低于4星的排除 |
+| `priority_boost` | 符合条件的排最前 | `{"area": "拱宸桥"}` 该商圈的排前面 |
+| `sort_by` | 按指定字段排序 | `{"field": "sold", "order": "desc"}` 按销量降序 |
+| `exclude` | 硬排除 | `{"status": 0}` 停业的不展示 |
+
+### MCP Server（可选）
+
+Spring AI MCP Server 在 `Agent/dataSource-mcp-server/` 下，将数据源以 MCP 标准协议注册为工具。启用后 LLM 可**自主发现和选择**需要调用的数据源，实现完全配置驱动：
+
+- `getAvailableDataSources()` → LLM 发现有哪些数据源
+- `getDataBySourceIDs([3,4,5], params)` → LLM 选好后聚合获取
+
+> MCP Server 需要 JDK 21，且需设置 `MCP_ENABLED=true` 后 Python Agent 才会走 MCP 协议。日常使用直接调 Java REST API 即可。
+
+### 前端集成指南
+
+1. **首次请求**不传 `conversationId`，保存返回值中的 `conversationId` 用于后续请求
+2. **429 限流**时，禁用发送按钮 3-5 秒后自动恢复，不要立即重试
+3. **展示布局建议**：
+   - 顶部：`summary` 作为 AI 推荐语（气泡样式）
+   - 中间：`recommendedShops` 卡片列表（点击跳转 `/shop/{id}`）
+   - `matchedTags` 展示为标签芯片，支持点击追加筛选
+   - 下部：`recommendedBlogs` 笔记列表（点击跳转 `/blog/{id}`）
+4. **空结果兜底**：`summary` 显示"暂无相关推荐"时，可降级到传统 `/shop/of/name` 搜索
+5. **多轮对话**：后端已预留 `conversationId` 机制，当前为单轮模式，多轮可后续扩展
+

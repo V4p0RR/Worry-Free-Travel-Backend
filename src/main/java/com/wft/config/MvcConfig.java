@@ -34,7 +34,8 @@ public class MvcConfig implements WebMvcConfigurer {
         "/shop/**",
         "/shop-type/**",
         "/voucher/list/{shopId}",
-        "/upload/**").order(1);
+        "/upload/**",
+        "/api/agent/**").order(1);
     registry.addInterceptor(new RefreshTokenInterceptor(stringRedisTemplate)).order(0);// 默认拦截所有请求 调节顺序，第一个执行
   }
 

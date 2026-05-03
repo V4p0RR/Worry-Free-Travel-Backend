@@ -1,0 +1,61 @@
+[
+  {
+    "id": 1,
+    "description": "意图案例库。包含4种意图（美食推荐/景点查询/攻略查看/其他），每种意图有关键词列表和触发条件描述。用于关键词匹配阶段判断用户意图。",
+    "url": "http://localhost:8081/api/agent/intent-cases",
+    "options": "GET",
+    "params": {}
+  },
+  {
+    "id": 2,
+    "description": "策略规则库。按场景返回推荐策略（评分过滤、区域加权、销量排序、排除停业等）。场景可选值：food_recommend / scene_query / guide，不传则返回全部。",
+    "url": "http://localhost:8081/api/agent/strategy-rules",
+    "options": "GET",
+    "params": {
+      "scene": {
+        "type": "String",
+        "description": "适用场景：food_recommend（美食推荐）/ scene_query（景点查询）/ guide（攻略查看）"
+      }
+    }
+  },
+  {
+    "id": 3,
+    "description": "标签词库。根据关键词搜索标签名和同义词，返回匹配的标签列表（id/name/category）。category可选：scene/food/price/mood/style。标签是连接用户需求与商家、笔记的桥梁，必须先获取标签才能继续查商家和笔记。",
+    "url": "http://localhost:8081/api/agent/tags",
+    "options": "GET",
+    "params": {
+      "keyword": {
+        "type": "String",
+        "description": "从用户需求中提取的关键词，如'川菜'、'约会'、'火锅'。会在标签名和同义词中匹配"
+      },
+      "category": {
+        "type": "String",
+        "description": "标签大类过滤：scene/food/price/mood/style。不传则不过滤"
+      }
+    }
+  },
+  {
+    "id": 4,
+    "description": "商家推荐数据。传入标签ID列表（从上一步标签查询结果中提取），返回关联的商家列表（id/name/area/address/avgPrice/score/images）。",
+    "url": "http://localhost:8081/api/agent/shops/by-tags",
+    "options": "GET",
+    "params": {
+      "tagIds": {
+        "type": "String",
+        "description": "标签ID列表，逗号分隔。从上一步标签查询结果中提取id字段拼接，如'6,1,3'"
+      }
+    }
+  },
+  {
+    "id": 5,
+    "description": "笔记推荐数据。传入标签ID列表，返回关联的探店笔记（id/title/content/liked/images）。",
+    "url": "http://localhost:8081/api/agent/blogs/by-tags",
+    "options": "GET",
+    "params": {
+      "tagIds": {
+        "type": "String",
+        "description": "标签ID列表，逗号分隔。从上一步标签查询结果中提取id字段拼接"
+      }
+    }
+  }
+]

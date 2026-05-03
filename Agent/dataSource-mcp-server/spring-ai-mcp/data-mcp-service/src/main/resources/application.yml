@@ -1,0 +1,8 @@
+server:
+  port: 8020
+spring:
+  ai:
+    mcp:
+      server:
+        name: data-mcp-server
+        version: 1.0.0
