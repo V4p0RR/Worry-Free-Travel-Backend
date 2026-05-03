@@ -1,25 +1,17 @@
 """
 LangGraph agent workflow for worry-free-travel.
+5 nodes matching 要求.md 18-step process.
 
-Flow matching 要求.md 18-step process:
+  START → recognize_intent → navigate_sources → aggregate_data
+        → build_candidates → smart_select → END
 
-  START
-    ↓
-  [1] recognize_intent   (步骤2-7: LLM主驱意图识别+标签提取，关键词校验兜底)
-    ↓
-  [2] navigate_sources   (步骤8-9: 数据源导航器)
-    ↓
-  [3] aggregate_data     (步骤10: 数据聚合器)
-    ↓
-  [4] build_candidates   (步骤11: 候选方案集合+排序)
-    ↓
-  [5] smart_select       (步骤12-16: 策略规则+LLM综合分析)
-    ↓
-  [6] explain_result     (步骤17-18: 解释性推荐输出)
-    ↓
-  END
+  recognize_intent  : 步骤2-7   LLM主驱意图识别+标签提取，关键词校验兜底
+  navigate_sources  : 步骤8-9   数据源导航器
+  aggregate_data    : 步骤10    数据聚合器
+  build_candidates  : 步骤11    候选方案集合+排序
+  smart_select      : 步骤12-18 策略规则+LLM选择+解释性输出
 
-Design principle: LLM主驱，关键词校验兜底。
+Design: LLM主驱，关键词校验兜底。
 """
 import json
 import logging
@@ -160,7 +152,6 @@ async def recognize_intent(state: AgentState) -> dict:
         "optimized_query": optimized or query,
         "matched_tags": matched,
         "matched_tag_ids": [t.get("id") for t in matched if t.get("id")],
-        "keyword_matched": bool(keyword_supplement) if 'keyword_supplement' in dir() else False,
     }
 
 
@@ -207,7 +198,6 @@ def _fallback_response(query: str, all_tags: list, intent_cases: list = None) ->
         "optimized_query": query,
         "matched_tags": matched,
         "matched_tag_ids": [t.get("id") for t in matched if t.get("id")],
-        "keyword_matched": True,
     }
 
 
@@ -303,15 +293,6 @@ async def build_candidates(state: AgentState) -> dict:
     if not shops and not blogs:
         logger.info("步骤11: 候选为空，按意图扩搜索")
         shops, blogs = await _expand_search(state.optimized_query, state.intention_key)
-
-    elif len(shops) < 2:
-        logger.info("步骤11: 候选不足(%d)，补充", len(shops))
-        extra, extra_blogs = await _expand_search(
-            state.optimized_query, state.intention_key,
-            exclude_ids=[s.get("id") for s in shops])
-        shops.extend(extra)
-        if extra_blogs:
-            blogs = (blogs or []) + extra_blogs
 
     logger.info("步骤11 候选: shops=%d blogs=%d", len(shops), len(blogs))
     return {"shops": shops, "blogs": blogs}
@@ -446,16 +427,7 @@ async def smart_select(state: AgentState) -> dict:
 
 
 # ═══════════════════════════════════════════════════════════════════
-# Node 6: 解释性输出 (步骤17-18)
-# ═══════════════════════════════════════════════════════════════════
-
-async def explain_result(state: AgentState) -> dict:
-    logger.info("步骤17-18: 最终结果生成完成")
-    return state.model_dump()
-
-
-# ═══════════════════════════════════════════════════════════════════
-# Routing
+# Routing (步骤17-18: 解释性输出由 smart_select 完成)
 # ═══════════════════════════════════════════════════════════════════
 
 def route_after_intent(state: AgentState) -> Literal["navigate_sources", "__end__"]:
@@ -535,9 +507,13 @@ def _shop_rating(shop: dict) -> float:
 
 def _default_summary(shops: list, blogs: list) -> str:
     parts = []
-    if shops: parts.append(f"{len(shops)}家相关商家")
-    if blogs: parts.append(f"{len(blogs)}篇相关笔记")
-    return f"为您找到{'和'.join(parts)}，请查看下方推荐结果。" if parts else "暂无相关推荐。"
+    if shops:
+        names = "、".join(s.get("name", "") for s in shops[:3])
+        parts.append(f"{names}等{len(shops)}家商家")
+    if blogs:
+        titles = "、".join(f"《{b.get('title','')}》" for b in blogs[:2])
+        parts.append(f"{titles}等{len(blogs)}篇笔记")
+    return f"为您找到{'，'.join(parts)}" if parts else "暂无相关推荐。"
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -547,12 +523,11 @@ def _default_summary(shops: list, blogs: list) -> str:
 def build_agent_graph() -> StateGraph:
     w = StateGraph(AgentState)
 
-    w.add_node("recognize_intent", recognize_intent)   # 步骤2-7 (LLM主驱)
-    w.add_node("navigate_sources", navigate_sources)   # 步骤8-9
-    w.add_node("aggregate_data", aggregate_data)       # 步骤10
-    w.add_node("build_candidates", build_candidates)   # 步骤11
-    w.add_node("smart_select", smart_select)           # 步骤12-16
-    w.add_node("explain_result", explain_result)       # 步骤17-18
+    w.add_node("recognize_intent", recognize_intent)
+    w.add_node("navigate_sources", navigate_sources)
+    w.add_node("aggregate_data", aggregate_data)
+    w.add_node("build_candidates", build_candidates)
+    w.add_node("smart_select", smart_select)
 
     w.set_entry_point("recognize_intent")
 
@@ -563,8 +538,7 @@ def build_agent_graph() -> StateGraph:
     w.add_edge("navigate_sources", "aggregate_data")
     w.add_edge("aggregate_data", "build_candidates")
     w.add_edge("build_candidates", "smart_select")
-    w.add_edge("smart_select", "explain_result")
-    w.add_edge("explain_result", END)
+    w.add_edge("smart_select", END)
 
     return w
 

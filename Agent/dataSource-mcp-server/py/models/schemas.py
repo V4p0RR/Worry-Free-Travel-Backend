@@ -46,17 +46,15 @@ class ChatResponse(BaseModel):
 
 
 class AgentState(BaseModel):
-    """State that flows through the LangGraph (7 nodes = 18 steps)."""
+    """State that flows through the LangGraph (6 nodes = 18 steps)."""
     user_id: Optional[int] = None
     query: str = ""
     conversation_id: str = ""
     intention: str = ""
     intention_key: str = "other"
     optimized_query: str = ""
-    keyword_matched: bool = False
     matched_tag_ids: List[int] = Field(default_factory=list)
     matched_tags: List[dict] = Field(default_factory=list)
-    structured_intent: dict = Field(default_factory=dict)
     source_ids: List[int] = Field(default_factory=list)
     source_params: dict = Field(default_factory=dict)
     shops: List[dict] = Field(default_factory=list)

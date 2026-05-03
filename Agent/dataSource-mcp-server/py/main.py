@@ -11,7 +11,6 @@ from collections import defaultdict
 import time
 
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import JSONResponse
 
 from models.schemas import ChatRequest, ChatResponse, AgentState
 from graph.agent_graph import get_agent_graph
