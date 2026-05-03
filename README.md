@@ -55,11 +55,7 @@
 ### 1. 数据库
 
 ```bash
-# 顺序导入
-mysql -u root -p worry_free_travel < src/main/resources/db/agent_migration.sql
-mysql -u root -p worry_free_travel < src/main/resources/db/seed_data.sql
-mysql -u root -p worry_free_travel < src/main/resources/db/fix_tags.sql
-mysql -u root -p worry_free_travel < src/main/resources/db/fix_intent.sql
+mysql -u root -p worry_free_travel < src/main/resources/db/db.sql
 ```
 
 ### 2. LLM 配置
@@ -173,7 +169,7 @@ curl -X POST http://localhost:8090/api/agent/chat \
 | 4 | 商家推荐 | `/api/agent/shops/by-tags?tagIds=` | 按标签命中数排序返回 |
 | 5 | 笔记推荐 | `/api/agent/blogs/by-tags?tagIds=` | 探店笔记关联推荐 |
 
-### Agent 数据表（8 张）
+### Agent 数据表（6 张）
 
 | 表 | 行数 | 说明 |
 |---|---|---|
@@ -183,8 +179,7 @@ curl -X POST http://localhost:8090/api/agent/chat \
 | `tb_intent_case` | 4 | 意图案例（美食/景点/攻略/其他） |
 | `tb_strategy_rule` | 6 | 策略规则（filter/boost/sort） |
 | `tb_data_source` | 5 | MCP 数据源配置 |
-| `tb_conversation_snapshot` | 0 | 对话快照（运行时写入） |
-| `tb_user_cs_profile` | 0 | 用户画像（运行时写入） |
+
 
 ### 前端对接
 
