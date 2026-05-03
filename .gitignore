@@ -46,6 +46,7 @@ venv/
 
 ### AI Agent ###
 Agent/dataSource-mcp-server/py/venv/
+Agent/dataSource-mcp-server/要求.md
 Agent/dataSource-mcp-server/py/config.py
 Agent/dataSource-mcp-server/target/
 Agent/dataSource-mcp-server/spring-ai-mcp/data-mcp-service/target/
