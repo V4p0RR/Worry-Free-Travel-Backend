@@ -95,17 +95,19 @@ async def recognize_intent(state: AgentState) -> dict:
     try:
         resp = await llm.ainvoke([
             {"role": "system", "content": (
-                "你是意图识别与标签提取专家。根据用户输入，完成以下任务：\n\n"
+                "你是意图识别与标签提取专家。\n\n"
                 "### 意图列表\n" + intent_desc + "\n\n"
-                "### 可用标签\n" + tag_desc + "\n\n"
+                "### 可用标签（含同义词，用你的语义理解来匹配）\n" + tag_desc + "\n\n"
                 "### 任务\n"
-                "1. 判断用户意图（intention_key: food/scene/guide/other）\n"
-                "2. 从标签中选出语义匹配的标签id（理解'撸串'→烧烤、'喝酒'→酒吧）\n"
-                "3. 优化用户表达使其更清晰完整\n\n"
+                "1. 判断意图：根据意图描述选择最匹配的 intention_key\n"
+                "2. 选标签：理解用户需求语义，从标签中选相关的。\n"
+                "   例：KTV→朋友聚餐+有包间、便宜→性价比高、安静→安静舒适\n"
+                "   不要硬凑，只选真正相关的，不确定就不选\n"
+                "3. 优化表达：把用户需求改写得更清晰完整\n\n"
                 "### 回复格式（严格JSON）\n"
                 '{"intention_key":"food","intention":"美食推荐",'
-                '"tag_ids":[8,4],"optimized_query":"优化后的需求描述"}\n'
-                "只回复JSON，不要其他内容。"
+                '"tag_ids":[8,4],"optimized_query":"改写后的需求"}\n'
+                "只回复JSON。"
             )},
             {"role": "user", "content": query},
         ])
@@ -407,13 +409,14 @@ async def smart_select(state: AgentState) -> dict:
             )
 
     sys_prompt = (
-        "你是旅行推荐专家。\n【硬约束】只能推荐候选列表中的真实商家，禁止编造。\n"
-        "理解用户需求后，选出最匹配的，说明排序理由。\n"
-        '回复JSON: {"recommended":[店名,...],"reasoning":"理由","tips":"建议"}'
+        "你是旅行推荐专家。\n"
+        "【硬约束】只能推荐候选列表中的真实商家，禁止编造。\n"
+        "选出最匹配用户需求的商家（只选真正相关的，不相关的不要选）。\n"
+        'tips: 给用户的实用建议（50字内）。\n'
+        '回复JSON: {"recommended":[店名,...],"tips":"建议"}'
     ) if not is_guide else (
-        "你是旅行攻略推荐专家。优先推荐笔记（博客），其次商家。\n【硬约束】禁止编造。\n"
-        '回复JSON: {"recommended_notes":[标题,...],"recommended_shops":[店名,...],'
-        '"reasoning":"理由","tips":"建议"}'
+        "你是旅行攻略推荐专家。优先推荐笔记，其次商家。\n【硬约束】禁止编造。\n"
+        '回复JSON: {"recommended_notes":[标题,...],"recommended_shops":[店名,...],"tips":"建议"}'
     )
 
     llm = _get_llm(0.5)
@@ -423,22 +426,19 @@ async def smart_select(state: AgentState) -> dict:
     ])
     sel = _parse_json_response(resp.content or "")
 
-    # 按LLM推荐排序
+    # 按LLM推荐排序，只保留LLM选中的
     if is_guide:
         names = sel.get("recommended_notes", [])
         if names:
             nmap = {b.get("title", ""): b for b in blogs}
-            reordered = [nmap[n] for n in names if n in nmap]
-            blogs = reordered + [b for b in blogs if b.get("title") not in names]
+            blogs = [nmap[n] for n in names if n in nmap]  # 截断，只保留推荐的
     else:
         names = sel.get("recommended", [])
         if names:
             nmap = {s.get("name", ""): s for s in shops}
-            reordered = [nmap[n] for n in names if n in nmap]
-            shops = reordered + [s for s in shops if s.get("name") not in names]
+            shops = [nmap[n] for n in names if n in nmap]  # 截断，只保留推荐的
 
     parts = []
-    if sel.get("reasoning"): parts.append(sel["reasoning"])
     if sel.get("tips"): parts.append(f"💡 {sel['tips']}")
     if not parts: parts.append(_default_summary(shops, blogs))
 
