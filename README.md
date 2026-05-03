@@ -1,104 +1,270 @@
-# 🚀 旅无忧 (Worry-Free Travel)
+# 旅无忧 (Worry-Free Travel)
 
-**旅无忧** 是一个基于 **Spring Boot + Redis + Kafka** 构建的高性能、高并发在线旅游点评平台。本项目深度集成多种分布式中间件，旨在解决大流量场景下的超卖、击穿、削峰等核心技术难题，是一个生产级的高并发实战项目。
-
----
-
-## 💡 核心技术亮点
-
-### 1. ⚡ 超硬核：负载感知自适应动态线程池
-项目内置了自定义的 `AdaptiveBufferedThreadPoolExecutor`，相比原生 Java 线程池具有以下优势：
-- **负载感知 (Load-Aware)**: 实时监控系统 CPU 和线程负载，动态调整扩容策略。
-- **本地缓冲队列 (BufferQueue)**: 配合背压机制，在下游处理缓慢时自动降速，防止系统过载。
-- **退避空转机制**: 在高负载下自动触发重试与等待逻辑，确保系统丝滑过渡。
-
-### 2. 🔥 高并发秒杀：Kafka + Lua + Redis
-系统实现了两套秒杀方案（通过配置自由切换），核心流程如下：
-- **原子性保证**: 深度使用 **Redis Lua 脚本** 校验库存与“一人一单”，确保请求在进入业务逻辑前即完成预判。
-- **Kafka 异步削峰**: 采用 Kafka 消息队列实现请求异步化，支持 **批量提交 Offset** 和 **慢任务重试**。
-- **背压流控 (Backpressure)**: 消费端实时监控线程池负载，自动暂停/恢复消息拉取，彻底解决大流量冲击下的系统崩溃风险。
-- **Redisson 分布式锁**: 确保分布式环境下交易的强一致性。
-
-### 3. 🛡️ 缓存深度加固
-针对分布式系统最脆弱的缓存环节，提供了全方位的防护：
-- **缓存穿透**: 采用缓存空对象方案。
-- **缓存击穿**: 实现基于 **互斥锁 (Mutex)** 的重构逻辑，确保热点 Key 失效时只有一个请求击穿到数据库。
-- **缓存雪崩**: 随机 TTL 策略防止大面积 Key 同时过期。
-- **Cache Aside 模式**: 严格保证数据库与缓存的最终一致性。
-
-### 4. 📊 极致性能统计
-- **全局唯一 ID 生成器**: 基于 Redis 的 64 位 ID 生成策略（时间戳 + 序列号），满足每日千万级订单生成需求。
-- **BitMap 签到**: 利用 Redis BitMap 实现极小空间开销下的连续签到统计，1 亿用户一个月的签到记录仅需约 400MB。
-- **HyperLogLog/GEO**: (扩展支持) 针对 UV 统计及附近商家搜索的极致优化。
+基于 **Spring Boot + Redis + Kafka + LangGraph** 的高性能在线旅游点评平台，集成 AI 智能推荐引擎。
 
 ---
 
-## 🏗️ 系统架构
-
-### 技术栈
-
-| 类别 | 技术选型 | 版本 | 说明 |
-| :--- | :--- | :--- | :--- |
-| **核心框架** | Spring Boot | 2.3.12 | 企业级快速开发 |
-| **消息中间件** | Apache Kafka | 3.4.0 | 高吞吐异步削峰 |
-| **分布式缓存** | Redis | 6.0+ | 数据预减、分布式锁、BitMap |
-| **分布式协调** | Redisson | 3.20.0 | 可重入分布式锁、看门狗 |
-| **数据库** | MySQL | 5.7+ | 关系型存储 |
-| **ORM** | MyBatis-Plus | 3.4.3 | 极速持久层开发 |
-| **自研组件** | AdaptivePool | 1.0 | 负载感知型动态线程池 |
-
----
-
-## 📂 项目结构
+## 系统架构
 
 ```
-wft-project/
+┌──────────────────────────────────────────────────────┐
+│                    前端 (Web/Mobile)                  │
+└──────────┬────────────────────────────┬──────────────┘
+           │                            │
+    POST :8090/api/agent/chat    GET :8081/shop/...
+           │                            │
+           ▼                            ▼
+┌──────────────────┐          ┌──────────────────┐
+│   Python Agent   │  HTTP    │   Java wft 主项目 │
+│   (LangGraph)    │─────────>│   (Spring Boot)  │
+│   Port 8090      │  数据API  │   Port 8081      │
+│                  │<─────────│                  │
+│ LLM 语义理解      │          │ 秒杀/缓存/点评     │
+│ 意图识别+标签提取  │          │ 数据读取API       │
+│ 推荐总结          │          │                  │
+└────────┬─────────┘          └────────┬─────────┘
+         │                             │
+         │ MCP (可选)                   │
+         ▼                             ▼
+┌──────────────────┐          ┌──────────────────┐
+│ Spring AI MCP    │          │  MySQL + Redis   │
+│ Server :8020     │          │  + Kafka         │
+│ (工具注册/发现)   │          │                  │
+└──────────────────┘          └──────────────────┘
+```
+
+### 三组件独立启动
+
+| 组件 | 端口 | 技术栈 | 职责 |
+|---|---|---|---|
+| Java wft | 8081 | Spring Boot 2.3 / Java 8 | 主业务 + 数据 API |
+| Python Agent | 8090 | FastAPI + LangGraph | AI 意图识别 + 推荐 |
+| MCP Server | 8020 | Spring AI / Java 21 | LLM 工具发现（可选） |
+
+---
+
+## 快速开始
+
+### 环境要求
+
+- JDK 8（wft 主项目）/ JDK 21（MCP Server 可选）
+- Python 3.9+（Agent）
+- MySQL 8.0 + Redis 6.0+
+
+### 1. 数据库初始化
+
+```bash
+# 导入 Agent 模块的 8 张表（标签/策略/意图/数据源等）
+mysql -u root -p worry_free_travel < src/main/resources/db/agent_migration.sql
+
+# 导入种子数据（64 家店铺 + 14 篇笔记 + 关联标签）
+mysql -u root -p worry_free_travel < src/main/resources/db/seed_data.sql
+
+# 修复语义标签（酒吧/东南亚菜等补充 + 意图关键词修正）
+mysql -u root -p worry_free_travel < src/main/resources/db/fix_tags.sql
+mysql -u root -p worry_free_travel < src/main/resources/db/fix_intent.sql
+```
+
+### 2. 配置 LLM API Key
+
+```bash
+# Windows / PowerShell
+$env:LLM_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1"
+$env:LLM_API_KEY="sk-your-key"
+$env:LLM_MODEL="qwen-plus"
+```
+
+兼容 OpenAI / DeepSeek / 通义千问 / 豆包 等所有 OpenAI 接口格式的 LLM。
+
+### 3. 启动 Java 主项目
+
+```bash
+mvn spring-boot:run
+# → http://localhost:8081
+```
+
+### 4. 启动 Python Agent
+
+```bash
+cd Agent\dataSource-mcp-server\py
+venv\Scripts\pip install -r requirements.txt       # 首次
+uvicorn main:app --host 0.0.0.0 --port 8090
+# → http://localhost:8090
+```
+
+验证：`curl http://localhost:8090/health` → `{"status":"ok"}`
+
+### 5. 启动 MCP Server（可选）
+
+```bash
+cd Agent\dataSource-mcp-server
+mvn spring-boot:run -pl spring-ai-mcp/data-mcp-service
+# → http://localhost:8020
+```
+
+设置 `$env:MCP_ENABLED="true"` 后重启 Agent，数据流转将通过 MCP 网关。
+
+### 6. 测试
+
+```bash
+curl -X POST http://localhost:8090/api/agent/chat \
+  -H "Content-Type: application/json" \
+  -d '{"query":"想吃火锅，有什么推荐"}'
+```
+
+---
+
+## AI Agent 工作流
+
+```
+用户: "推荐便宜的火锅店"
+        │
+        ▼
+[recognize_intent]   LLM 一次调用完成:
+  ├─ 意图识别: food (美食推荐)
+  ├─ 标签提取: [火锅(8), 性价比高(4)]
+  └─ 表达优化: "寻找人均实惠的火锅餐厅"
+        │
+        ▼
+[navigate_sources]   数据源导航 → 选择 [策略(2), 商家(4), 笔记(5)]
+        │
+        ▼
+[aggregate_data]     并发拉取: 商家 + 笔记 + 策略规则
+        │
+        ▼
+[build_candidates]   评分排序, 空结果时智能扩搜索
+        │
+        ▼
+[smart_select]       策略规则过滤 → LLM 分析 → 选出最优 → 输出推荐语
+        │
+        ▼
+     前端渲染
+```
+
+**设计原则**: LLM 语义理解为主驱动，关键词字面匹配做校验兜底。
+
+---
+
+## 项目结构
+
+```
+worry-free-travel/
 ├── src/main/java/com/wft/
-│   ├── config/                    # 配置中心 (Kafka/Redis/Mvc/MyBatis)
-│   ├── controller/                # API 接入层 (用户/点评/商家/优惠券)
-│   ├── service/                   # 核心业务逻辑
-│   │   └── impl/                  # 秒杀逻辑双实现 (Kafka/Redis Stream)
-│   ├── mapper/                    # 数据访问层
-│   ├── entity/                    # 数据库映射对象
-│   ├── dto/                       # 数据传输对象 (Result/UserDTO)
-│   ├── utils/                     # 核心工具 (ID生成器/分布式锁/正则)
-│   └── WftApplication.java        # 主程序入口
-├── src/main/resources/
-│   ├── seckill-kafka.lua          # Kafka 版秒杀脚本
-│   ├── seckill.lua                # Redis Stream 版脚本
-│   └── application.yaml           # 系统核心配置
-└── AdaptiveBufferedThreadPoolExecutor/ # 自研动态线程池核心模块
+│   ├── config/              # Kafka/Redis/Mvc/MyBatis 配置
+│   ├── controller/          # API 接入层
+│   │   └── AgentDataController.java  # Agent 数据读取 API
+│   ├── service/impl/        # 秒杀(Kafka/Redis双实现)
+│   ├── mapper/              # MyBatis-Plus 数据访问
+│   ├── entity/              # 数据库实体（含 Agent 相关）
+│   ├── dto/                 # Result/UserDTO
+│   └── utils/               # Redis锁/ID生成器/线程池
+├── Agent/
+│   └── dataSource-mcp-server/
+│       ├── py/              # Python LangGraph Agent
+│       │   ├── main.py      # FastAPI 入口 (port 8090)
+│       │   ├── graph/agent_graph.py  # 5节点工作流
+│       │   ├── client/      # Java API / MCP 客户端
+│       │   ├── models/      # Pydantic 请求/响应模型
+│       │   └── config.py    # 环境变量配置
+│       └── spring-ai-mcp/   # MCP Server (port 8020, 可选)
+├── AdaptiveBufferedThreadPoolExecutor/  # 自研动态线程池
+├── src/main/resources/db/
+│   ├── agent_migration.sql  # Agent 建表 + 种子数据
+│   ├── seed_data.sql        # 店铺/笔记种子数据
+│   ├── fix_tags.sql         # 标签修正
+│   └── fix_intent.sql       # 意图关键词修正
+├── API文档.md               # 完整接口文档
+└── pom.xml                  # Maven (Java 8)
 ```
 
 ---
 
-## ⚙️ 核心配置
+## AI Agent 数据表
 
-### 模式切换
-你可以在 `application.yaml` 中一键切换秒杀引擎：
+| 表 | 说明 | 行数 |
+|---|---|---|
+| `tb_tag` | 标签词库（菜系/场景/价格/风格） | 21 |
+| `tb_shop_tag` | 商家-标签关联 | 130 |
+| `tb_blog_tag` | 笔记-标签关联 | 34 |
+| `tb_intent_case` | 意图案例库（关键词+触发条件） | 4 |
+| `tb_strategy_rule` | 策略规则（过滤/权重/排序） | 6 |
+| `tb_data_source` | 数据源配置（导航器） | 5 |
+| `tb_conversation_snapshot` | 对话快照（运行时写入） | 0 |
+| `tb_user_cs_profile` | 用户画像（运行时写入） | 0 |
+
+---
+
+## 前端对接
+
+前端只需调一个接口：
+
+```
+POST :8090/api/agent/chat
+Body: { "query": "想吃火锅", "userId": 1001, "conversationId": "上次返回的ID" }
+```
+
+返回结构含 `link` 字段可直接跳转：
+
+```json
+{
+  "recommendedShops": [{ "id": 5, "name": "海底捞", "link": "/shop/5", ... }],
+  "recommendedBlogs": [{ "id": 28, "title": "贰麻酒馆", "link": "/blog/28", ... }],
+  "summary": "为您推荐海底捞火锅..."
+}
+```
+
+完整接口文档见 [API文档.md](API文档.md)。
+
+---
+
+## 核心技术
+
+### 高并发秒杀
+- Redis Lua 原子扣减 + 一人一单校验
+- Kafka 异步削峰 + 批量提交 + 慢任务重试
+- 背压流控：消费端实时监控线程池负载，自动暂停/恢复拉取
+- Redisson 分布式锁
+
+### 缓存加固
+- 缓存穿透 → 空对象缓存
+- 缓存击穿 → 互斥锁重构
+- 缓存雪崩 → 随机 TTL
+- Cache Aside 一致性模式
+
+### 自研动态线程池
+`AdaptiveBufferedThreadPoolExecutor` 具备 CPU 负载感知、本地缓冲队列、退避空转机制，在高负载下自动降速保护系统。
+
+### AI 智能推荐
+- LangGraph 5 节点工作流，LLM 主驱语义理解
+- 双判断意图识别（LLM 语义 + 关键词校验）
+- MCP 数据源导航器 + 聚合器（配置化工具发现）
+- 策略规则引擎（filter/boost/sort/exclude）
+- 全量商店智能兜底（绝不编造）
+
+---
+
+## 配置
+
+### 秒杀模式切换
 ```yaml
 wft:
   seckill:
-    mode: kafka    # 推荐：支持高吞吐背压模式
-    # mode: redis  # 基础：轻量级消息队列模式
+    mode: kafka    # 高吞吐背压模式（推荐）
+    # mode: redis  # Redis Stream 模式
 ```
 
-### 数据库 & Redis
-```yaml
-spring:
-  datasource:
-    url: jdbc:mysql://127.0.0.1:3306/wft_db
-  redis:
-    host: 127.0.0.1
-    lettuce:
-      pool:
-        max-active: 100 # 连接池深度优化
-```
+### LLM 配置（环境变量）
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `LLM_BASE_URL` | `https://api.openai.com` | API 地址 |
+| `LLM_API_KEY` | — | API 密钥（必填） |
+| `LLM_MODEL` | `gpt-3.5-turbo` | 模型名 |
+| `JAVA_API_BASE` | `http://localhost:8081/api/agent` | Java 数据 API |
+| `MCP_ENABLED` | `false` | 启用 MCP 网关 |
+| `RATE_LIMIT_MAX` | `20` | 每分钟限流 |
 
 ---
 
-## 📈 TODO
+## License
 
-### 短期规划 (1-3 weeks)
-- ⏳ **微服务化改造**: 将秒杀与点评拆分为独立微服务。
-- ⏳ **MCP 模块集成**: 引入 Model Context Protocol 支持 AI 辅助分析。
+MIT
