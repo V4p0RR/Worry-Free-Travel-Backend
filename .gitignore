@@ -47,6 +47,7 @@ venv/
 ### AI Agent ###
 Agent/dataSource-mcp-server/py/venv/
 Agent/dataSource-mcp-server/要求.md
+Agent/dataSource-mcp-server/新增要求.md
 Agent/dataSource-mcp-server/py/config.py
 Agent/dataSource-mcp-server/target/
 Agent/dataSource-mcp-server/spring-ai-mcp/data-mcp-service/target/
@@ -56,3 +57,6 @@ Agent/dataSource-mcp-server/spring-ai-mcp/target/
 /nginx-1.18.0/logs/*
 /nginx-1.18.0/docs/*
 /nginx-1.18.0/
+
+### 其他 ###
+/稿子
